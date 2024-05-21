@@ -10,18 +10,18 @@
         android:name="com.example.navigationdrawertesting.ui.home.Home"
         android:label="@string/menu_home"
         tools:layout="@layout/fragment_home" />
-
-    <fragment
-        android:id="@+id/nav_apk_scan"
-        android:name="com.example.navigationdrawertesting.ui.ApkScan.APKScan"
-        android:label="@string/menu_apk_scan"
-        tools:layout="@layout/fragment_scan_apk"/>
-
     <fragment
         android:id="@+id/nav_about_us"
         android:name="com.example.navigationdrawertesting.ui.AboutUs.AboutUs"
         android:label="@string/about_us_label"
         tools:layout="@layout/fragment_about_us"/>
+
+    <activity
+        android:id="@+id/nav_apk_scan"
+        android:name="com.example.navigationdrawertesting.ui.ApkScan.APKScan"
+        tools:layout="@layout/fragment_scan_apk" />
+
+
 
 
 

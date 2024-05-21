@@ -25,10 +25,18 @@
             android:theme="@style/Theme.NavigationDrawerTesting.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity android:name=".ui.ApkScan.APKScan"
+            android:exported="true"
+            android:label="@string/apk_scan_label"
+            android:theme="@style/Theme.NavigationDrawerTesting.NoActionBar">
+
+        </activity>
+
+
     </application>
 
 </manifest>

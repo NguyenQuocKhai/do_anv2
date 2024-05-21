@@ -1,101 +1,248 @@
 package com.example.navigationdrawertesting.ui.ApkScan;
 
 
-import static android.app.Activity.RESULT_OK;
+
+
+
+import static com.example.navigationdrawertesting.ui.ApkScan.UploadFileToServer.uploadFile;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.ProgressDialog;
 
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+
 import android.os.Handler;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-
-import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
+import androidx.core.app.ActivityCompat;
 
 import com.example.navigationdrawertesting.R;
 
-public class APKScan extends Fragment {
-    //variables (id)
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+
+public class APKScan extends Activity {
+    //variables
     final int ACTIVITY_CHOOSE_FILE = 1;
+    static int uploadResponseCode = 0;
     String selectedFilePath = null;
+
     Button fileSelectorButton;
     TextView selectedFileTextView;
     Button uploadButton;
+    ProgressDialog uploadScanDialog;
+    ProgressDialog downloadScanDialog;
     TextView scanCompleteTextView;
     Button downloadButton;
     TextView downloadedTextView;
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        //inflate the layout for this fragment( callout the content of the layout to this fragement)
-        View view = inflater.inflate(R.layout.fragment_scan_apk, container, false);
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.fragment_scan_apk);
+        ActivityCompat.requestPermissions(this,
+                new String[]{
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        Manifest.permission.READ_EXTERNAL_STORAGE},
+                PackageManager.PERMISSION_GRANTED);
 
-        // Initialize views
-        fileSelectorButton = view.findViewById(R.id.fileSelectorButton);
-        selectedFileTextView = view.findViewById(R.id.selectedFileTextView);
-        uploadButton = view.findViewById(R.id.uploadButton);
-        scanCompleteTextView = view.findViewById(R.id.scanCompleteTextView);
-        downloadButton = view.findViewById(R.id.downloadButton);
-        downloadedTextView = view.findViewById(R.id.downloadedSizeTextView);
+        fileSelectorButton = (Button) findViewById(R.id.fileSelectorButton);
+        selectedFileTextView = (TextView) findViewById(R.id.selectedFileTextView);
+        uploadButton = (Button) findViewById(R.id.uploadButton);
+        scanCompleteTextView = (TextView) findViewById(R.id.scanCompleteTextView);
+        downloadButton = (Button) findViewById(R.id.downloadButton);
+        downloadedTextView = (TextView) findViewById(R.id.downloadedSizeTextView);
 
-        // Setup click listeners and logic
-        setupClickListeners();
+        fileSelectorButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent chooseFile;
+                Intent intent;
+                chooseFile = new Intent(Intent.ACTION_GET_CONTENT);
+                chooseFile.setType("*/*");
+                intent = Intent.createChooser(chooseFile, "Choose a file");
+                startActivityForResult(intent, ACTIVITY_CHOOSE_FILE);
 
-        return view;
-    }
-
-    private void setupClickListeners() {
-        fileSelectorButton.setOnClickListener(v -> {
-            Intent chooseFile = new Intent(Intent.ACTION_GET_CONTENT);
-            chooseFile.setType("*/*");
-            startActivityForResult(Intent.createChooser(chooseFile, "Choose a file"), ACTIVITY_CHOOSE_FILE);
-        });
-
-        uploadButton.setOnClickListener(v -> {
-            if (selectedFilePath != null) {
-                // Show progress dialog in a Fragment context, you can use getActivity() to retrieve context
-                Toast.makeText(getActivity(), "Start upload and scan process", Toast.LENGTH_SHORT).show();
-                // Implement actual upload and scan logic here
-            } else {
-                Toast.makeText(getActivity(), "Please select a file to upload!!", Toast.LENGTH_LONG).show();
             }
         });
 
-        downloadButton.setOnClickListener(v -> {
-            // Simulate delay and download logic
-            new Handler().postDelayed(() -> {
-                // Placeholder for actual download logic
-                Toast.makeText(getActivity(), "Simulate download", Toast.LENGTH_SHORT).show();
-            }, 30000); // 30-second delay
+        uploadButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (selectedFilePath != null) {
+                    uploadScanDialog = ProgressDialog.show(APKScan.this, "",
+                            "Upload and Scan Process Started...", true);
+                    new Thread(new Runnable() {
+                        public void run() {
+                            //new thread to start the activity
+                            int uploadResponseCode = uploadFile(selectedFilePath);
+                            uploadScanDialog.dismiss();
+                            if (uploadResponseCode == 200) {
+                                runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        scanCompleteTextView
+                                                .setText("File Scan Complete!!");
+                                        downloadButton.setVisibility(View.VISIBLE);
+                                    }
+                                });
+                            } else {
+                                runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        downloadButton.setVisibility(View.VISIBLE);
+                                    }
+                                });
+                            }
+                        }
+                    }).start();
+                } else {
+                    Toast.makeText(APKScan.this,
+                                    "Please select a file to upload!!", Toast.LENGTH_LONG)
+                            .show();
+                }
+            }
         });
+
+        downloadButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                downloadScanDialog = ProgressDialog.show(APKScan.this, "",
+                        "Preparing to Download Scan Results...", true);
+
+                // Handler to add a delay
+                new Handler().postDelayed(() -> {
+                    String fileName = new File(selectedFilePath).getName();
+                    String URL_STRING = "http://34.126.66.46/reports/" + fileName + ".txt";
+                    new Thread(() -> {
+                        try {
+                            URL url = new URL(URL_STRING);
+                            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                            connection.setRequestMethod("GET");
+
+                            int responseCode = connection.getResponseCode();
+                            if (responseCode == HttpURLConnection.HTTP_OK) {
+                                // Process the response as before
+                                InputStream inputStream = connection.getInputStream();
+                                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+                                StringBuilder stringBuilder = new StringBuilder();
+                                String line;
+                                while ((line = reader.readLine()) != null) {
+                                    stringBuilder.append(line + "\n");
+                                }
+                                inputStream.close();
+                                reader.close();
+                                String finalResult = stringBuilder.toString();
+
+                                runOnUiThread(() -> {
+                                    downloadedTextView.setVisibility(View.VISIBLE);
+                                    downloadedTextView.setText(finalResult);
+                                    downloadScanDialog.dismiss();
+                                });
+                            } else {
+                                runOnUiThread(() -> {
+                                    downloadedTextView.setVisibility(View.VISIBLE);
+                                    downloadedTextView.setText("Failed to download: Server responded with code " + responseCode);
+                                    downloadScanDialog.dismiss();
+                                });
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            runOnUiThread(() -> {
+                                downloadedTextView.setVisibility(View.VISIBLE);
+                                downloadedTextView.setText("Error: " + e.toString());
+                                downloadScanDialog.dismiss();
+                            });
+                        }
+                    }).start();
+                }, 30000); // Delay for 30 seconds before attempting to download
+            }
+        });
+
     }
 
     @Override
-    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == ACTIVITY_CHOOSE_FILE && resultCode == getActivity().RESULT_OK && data != null) {
-            Uri uri = data.getData();
-            selectedFilePath = getPathFromUri(getActivity(), uri);
-            selectedFileTextView.setText("Selected File: " + selectedFilePath);
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        switch (requestCode) {
+            case ACTIVITY_CHOOSE_FILE: {
+                if (resultCode == RESULT_OK) {
+                    Uri uri = data.getData();
+                    System.out.println(uri.toString());
+                    selectedFilePath = getPathFromUri(this, uri);
+                    System.out.println(selectedFilePath);
+                    selectedFileTextView.setText("Selected File: " + selectedFilePath);
+                }
+            }
+
         }
     }
 
-    // Methods to handle URI and get path from URI, similar to the original activity
+
     public static String getPathFromUri(Context context, Uri uri) {
-        // Implement getPathFromUri logic similar to the original activity, ensure it is using the context properly
-        return null; // Placeholder
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && DocumentsContract.isDocumentUri(context, uri)) {
+            // Nếu là URI của ExternalStorageProvider, ta cần lấy ID của tài liệu
+            if (isExternalStorageDocument(uri)) {
+                final String docId = DocumentsContract.getDocumentId(uri);
+                final String[] split = docId.split(":");
+                final String type = split[0];
+
+                if ("primary".equalsIgnoreCase(type)) {
+                    return context.getExternalFilesDir(null) + "/" + split[1];
+                }
+            }
+            // Nếu là URI của DownloadsProvider, ta cần lấy ID của tài liệu
+            else if (isDownloadsDocument(uri)) {
+                final String id = DocumentsContract.getDocumentId(uri);
+                final Uri contentUri = ContentUris.withAppendedId(Uri.parse("content://downloads/public_downloads"), Long.parseLong(id));
+                return getDataColumn(context, contentUri, null, null);
+            }
+            // Nếu là URI của MediaProvider, ta cần lấy ID của tài liệu
+            else if (isMediaDocument(uri)) {
+                final String docId = DocumentsContract.getDocumentId(uri);
+                final String[] split = docId.split(":");
+                final String type = split[0];
+
+                Uri contentUri = null;
+                if ("image".equals(type)) {
+                    contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                } else if ("video".equals(type)) {
+                    contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+                } else if ("audio".equals(type)) {
+                    contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                }
+
+                final String selection = "_id=?";
+                final String[] selectionArgs = new String[]{split[1]};
+
+                return getDataColumn(context, contentUri, selection, selectionArgs);
+            }
+        }
+        // Nếu không phải là DocumentProvider, ta sử dụng cách tiêu chuẩn để lấy đường dẫn
+        else if ("content".equalsIgnoreCase(uri.getScheme())) {
+            return getDataColumn(context, uri, null, null);
+        }
+        // Nếu là URI của FileProvider, ta lấy đường dẫn trực tiếp từ URI
+        else if ("file".equalsIgnoreCase(uri.getScheme())) {
+            return uri.getPath();
+        }
+        return null;
+
     }
 
     private static boolean isExternalStorageDocument(Uri uri) {
@@ -109,6 +256,8 @@ public class APKScan extends Fragment {
     private static boolean isMediaDocument(Uri uri) {
         return "com.android.providers.media.documents".equals(uri.getAuthority());
     }
+
+
     private static String getDataColumn(Context context, Uri uri, String selection, String[] selectionArgs) {
         Cursor cursor = null;
         String column = "_data";
@@ -127,5 +276,6 @@ public class APKScan extends Fragment {
         }
         return null;
     }
+
 
 }
